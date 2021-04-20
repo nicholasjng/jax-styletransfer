@@ -1,0 +1,6 @@
+venv
+.idea
+images
+
+# macOS specifics
+.DS_Store

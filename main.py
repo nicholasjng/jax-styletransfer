@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Mapping, Any
+from typing import Optional, Mapping, Any
 
 import haiku as hk
 import jax

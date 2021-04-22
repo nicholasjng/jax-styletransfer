@@ -1,58 +1,17 @@
-from typing import Optional, Mapping, Any
+import copy
+from typing import Mapping, Any
 
 import haiku as hk
 import jax
-from jax.flatten_util import ravel_pytree
 import jax.numpy as jnp
 import numpy as np
 import optax
-
 from PIL import Image
-
-import copy
+from jax.flatten_util import ravel_pytree
+from modules import StyleLoss, ContentLoss
 
 Batch = Mapping[str, np.ndarray]
 State = Mapping[str, jnp.ndarray]
-
-
-class StyleLoss(hk.Module):
-
-    def __init__(self, target, name: Optional[str] = None):
-        super(StyleLoss, self).__init__(name=name)
-        self.target_g = jax.lax.stop_gradient(gram_matrix(target))
-
-    def __call__(self, x):
-        g = gram_matrix(x)
-
-        style_loss = jnp.mean(jnp.square(g - self.target_g))
-        hk.set_state("style_loss", style_loss)
-
-        return x
-
-
-class ContentLoss(hk.Module):
-
-    def __init__(self, target, name: Optional[str] = None):
-        super(ContentLoss, self).__init__(name=name)
-        self.target = jax.lax.stop_gradient(target)
-
-    def __call__(self, x):
-        content_loss = jnp.mean(jnp.square(x - self.target))
-        hk.set_state("content_loss", content_loss)
-
-        return x
-
-
-def gram_matrix(x: jnp.array):
-    """Computes Gram Matrix of an input array x."""
-    # N-C-H-W format
-    n, c, h, w = x.shape
-
-    assert n == 1, "mini-batch has to be singular rn"
-
-    features = jnp.reshape(x, (n * c, h * w))
-
-    return jnp.dot(features, features.T) / (n * c * h * w)
 
 
 def build_augmented_vgg19(style_image: jnp.array,
@@ -116,7 +75,6 @@ def run_style_transfer(style_weight: float = 1e6,
                        content_weight: float = 1.,
                        num_steps: int = 300,
                        learning_rate: float = 1e-3):
-
     print('Loading content image...')
     content_image = Image.open('images/dancing.jpg')
     content_image = np.array(content_image).astype('float32') / 255.

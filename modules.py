@@ -4,6 +4,22 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 
+# ImageNet statistics
+imagenet_mean = jnp.array([0.485, 0.456, 0.406])
+imagenet_std = jnp.array([0.229, 0.224, 0.225])
+
+
+def gram_matrix(x: jnp.array):
+    """Computes Gram Matrix of an input array x."""
+    # N-C-H-W format
+    n, c, h, w = x.shape
+
+    assert n == 1, "mini-batch has to be singular right now"
+
+    features = jnp.reshape(x, (n * c, h * w))
+
+    return jnp.dot(features, features.T) / (n * c * h * w)
+
 
 class StyleLoss(hk.Module):
 
@@ -33,13 +49,17 @@ class ContentLoss(hk.Module):
         return x
 
 
-def gram_matrix(x: jnp.array):
-    """Computes Gram Matrix of an input array x."""
-    # N-C-H-W format
-    n, c, h, w = x.shape
+class Normalization(hk.Module):
+    # create a module normalizing input image so we can easily put it in a
+    # hk.Sequential
+    def __init__(self, mean, std):
+        super(Normalization, self).__init__()
+        # reshape mean and std to make them [C x 1 x 1] so that they can
+        # directly work with image Tensor of shape [N x C x H x W].
+        self.mean = jnp.array(mean).reshape(-1, 1, 1)
+        self.std = jnp.array(std).reshape(-1, 1, 1)
 
-    assert n == 1, "mini-batch has to be singular rn"
-
-    features = jnp.reshape(x, (n * c, h * w))
-
-    return jnp.dot(features, features.T) / (n * c * h * w)
+    def forward(self, x):
+        # normalize input
+        # TODO: Add image variable
+        return (x - self.mean) / self.std

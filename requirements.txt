@@ -3,3 +3,4 @@ jaxlib==0.1.65
 optax==0.0.6
 dm-haiku==0.0.4
 Pillow==8.2.0
+h5py==3.2.1

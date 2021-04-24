@@ -16,7 +16,7 @@ def reduce_loss_tree(loss_tree: Mapping) -> jnp.array:
 
 
 def weighted_loss(loss_tree: Mapping, weights: Mapping) -> Any:
-    """Updates a loss tree to a weighted loss tree."""
+    """Updates a loss tree by applying weights at the leaves."""
     return hk.data_structures.map(
             # m: module_name, n: param name, v: param value
             lambda m, n, v: weights[n] * v,
@@ -24,7 +24,7 @@ def weighted_loss(loss_tree: Mapping, weights: Mapping) -> Any:
 
 
 def split_loss_tree(loss_tree: Mapping):
-    """Splits a loss tree into content and style trees."""
+    """Splits a loss tree into content and style loss trees."""
     return hk.data_structures.partition(
         lambda m, n, v: n == "content_loss",
         loss_tree)

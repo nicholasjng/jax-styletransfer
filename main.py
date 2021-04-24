@@ -7,65 +7,8 @@ import jax.numpy as jnp
 import optax
 
 from image_utils import load_image
-from modules import StyleLoss, ContentLoss
+from models import augmented_vgg19
 from tree_utils import weighted_loss, calculate_losses, reduce_loss_tree
-
-
-def build_augmented_vgg19(style_image: jnp.array,
-                          content_image: jnp.array) -> hk.Sequential:
-    layers = []
-    n_conv, n_pools, c_losses, s_losses = 1, 1, 1, 1
-
-    cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M',
-           512, 512, 512, 'M']
-
-    # desired depth layers to compute style/content losses :
-    content_layers = ['conv_4']
-    style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
-
-    model = hk.Sequential(layers=layers)
-
-    for val in cfg:
-        if val == "M":
-            layers.append(hk.MaxPool(window_shape=2,
-                                     strides=2,
-                                     padding="VALID",
-                                     channel_axis=1,
-                                     name=f"max_pool_{n_pools}"))
-            n_pools += 1
-
-        else:
-            name = f"conv_{n_conv}"
-            layers.append(hk.Conv2D(output_channels=val,
-                                    kernel_shape=3,
-                                    stride=1,
-                                    padding="SAME",
-                                    data_format="NCHW",
-                                    name=name))
-            n_conv += 1
-
-            if name in content_layers:
-                model.layers = tuple(layers)
-                style_target = model(content_image)
-                style_loss = StyleLoss(target=style_target,
-                                       name=f"style_loss_{s_losses}")
-                layers.append(style_loss)
-
-                s_losses += 1
-
-            if name in style_layers:
-                model.layers = tuple(layers)
-                content_target = model(style_image)
-                content_loss = ContentLoss(target=content_target,
-                                           name=f"content_loss_{c_losses}")
-                layers.append(content_loss)
-                c_losses += 1
-
-            layers.append(jax.nn.relu)
-
-    model.layers = tuple(layers)
-
-    return model
 
 
 def run_style_transfer(style_weight: float = 1e6,
@@ -78,21 +21,21 @@ def run_style_transfer(style_weight: float = 1e6,
     weights = {"content_loss": content_weight,
                "style_loss": style_weight}
 
-    def net_fn(batch: jnp.ndarray):
-        x = batch
-        vgg = build_augmented_vgg19(style_image=style_image,
-                                    content_image=content_image)
-        return vgg(x)
+    def net_fn(image: jnp.ndarray):
+        vgg = augmented_vgg19(style_image=style_image,
+                              content_image=content_image)
+        return vgg(image)
 
-    def loss(current_params: hk.Params,
-             current_state: hk.State,
-             current_batch: jnp.ndarray):
-        # calling convention for stateful transformation
-        # state contains the losses
-        _, new_state = net.apply(current_params,
-                                 current_state,
-                                 rng,
-                                 current_batch)
+    def loss(trainable_params: hk.Params,
+             non_trainable_params: hk.Params,
+             state: hk.State,
+             image: jnp.ndarray):
+
+        merged_params = hk.data_structures.merge(trainable_params,
+                                                 non_trainable_params)
+
+        # stateful apply call, state contains the losses
+        _, new_state = net.apply(merged_params, state, rng, image)
 
         w_loss = weighted_loss(new_state, weights=weights)
 
@@ -101,22 +44,21 @@ def run_style_transfer(style_weight: float = 1e6,
         return loss_val, new_state
 
     @jax.jit
-    def update(current_params: hk.Params,
-               current_opt_state: optax.OptState,
-               current_state: hk.State,
-               current_batch: jnp.ndarray) \
+    def update(trainable_params: hk.Params, non_trainable_params: hk.Params,
+               c_opt_state: optax.OptState, c_state: hk.State,
+               image: jnp.ndarray) \
             -> Tuple[hk.Params, optax.OptState, hk.State]:
         """Learning rule (stochastic gradient descent)."""
-        (_, new_state), grads = (
-            jax.value_and_grad(loss, has_aux=True)(current_params,
-                                                   current_state,
-                                                   current_batch))
+        (_, new_state), trainable_grads = (
+            jax.value_and_grad(loss, has_aux=True)(trainable_params,
+                                                   non_trainable_params,
+                                                   c_state,
+                                                   image))
 
-        updates, new_opt_state = opt.update(grads,
-                                            current_opt_state,
-                                            current_params)
+        # update trainable params
+        updates, new_opt_state = opt.update(trainable_grads, c_opt_state)
 
-        new_params = optax.apply_updates(current_params, updates)
+        new_params = optax.apply_updates(trainable_params, updates)
 
         return new_params, new_opt_state, new_state
 
@@ -124,16 +66,22 @@ def run_style_transfer(style_weight: float = 1e6,
     opt = optax.adam(learning_rate=learning_rate)
     rng = jax.random.PRNGKey(420)
 
-    # Initialize network and optimiser; note we draw an input to get shapes.
-    params, state = net.init(rng, style_image)
-    opt_state = opt.init(params)
+    # Initialize network and optimiser; we supply an input to get shapes.
+    full_params, state = net.init(rng, style_image)
+    opt_state = opt.init(full_params)
 
     input_img = copy.deepcopy(content_image)
+
+    t_params, nt_params = hk.data_structures.partition(
+        lambda m, n, v: m == "normalization",
+        full_params
+    )
 
     # Training loop.
     for step in range(num_steps + 1):
         # Do SGD on a batch of training examples.
-        params, opt_state, state = update(params, opt_state, state, input_img)
+        t_params, opt_state, state = update(t_params, nt_params,
+                                            opt_state, state, input_img)
 
         if step % 10 == 0:
             c_loss, s_loss = calculate_losses(state)

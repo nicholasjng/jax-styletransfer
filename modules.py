@@ -12,6 +12,8 @@ imagenet_std = jnp.array([0.229, 0.224, 0.225])
 def gram_matrix(x: jnp.ndarray):
     """Computes Gram Matrix of an input array x."""
     # N-C-H-W format
+    # TODO: Refactor this to compute the Gram matrix of a feature map
+    #  and then apply jax.vmap on the batch dimension
     n, c, h, w = x.shape
 
     assert n == 1, "mini-batch has to be singular right now"
@@ -22,6 +24,7 @@ def gram_matrix(x: jnp.ndarray):
 
 
 class StyleLoss(hk.Module):
+    """Identity layer capturing the style loss between input and target."""
 
     def __init__(self, target, name: Optional[str] = None):
         super(StyleLoss, self).__init__(name=name)
@@ -37,6 +40,7 @@ class StyleLoss(hk.Module):
 
 
 class ContentLoss(hk.Module):
+    """Identity layer capturing the content loss between input and target."""
 
     def __init__(self, target, name: Optional[str] = None):
         super(ContentLoss, self).__init__(name=name)
@@ -52,7 +56,10 @@ class ContentLoss(hk.Module):
 class Normalization(hk.Module):
     # create a module normalizing the input image
     # so we can easily put it into a hk.Sequential
-    def __init__(self, image: jnp.ndarray, mean: jnp.ndarray, std: jnp.ndarray,
+    def __init__(self,
+                 image: jnp.ndarray,
+                 mean: jnp.ndarray,
+                 std: jnp.ndarray,
                  name: Optional[str] = None):
         super(Normalization, self).__init__(name=name)
 
@@ -64,7 +71,7 @@ class Normalization(hk.Module):
         self.mean = jnp.array(mean).reshape(-1, 1, 1)
         self.std = jnp.array(std).reshape(-1, 1, 1)
 
-    def forward(self, x):
+    def forward(self, x: jnp.ndarray):
         # throw away the input and (re-)use the tracked parameter instead
         # this assures that the image is actually styled
         img = hk.get_parameter("image",

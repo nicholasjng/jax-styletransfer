@@ -21,7 +21,8 @@ def run_style_transfer(content_fp: str,
                        style_layers: List[str] = None,
                        pooling: str = "avg",
                        num_steps: int = 300,
-                       learning_rate: float = 1e-3):
+                       learning_rate: float = 1e-3,
+                       save_image_every: int = 50):
     content_image = load_image(content_fp, "content")
     style_image = load_image(style_fp, "style")
 
@@ -100,9 +101,18 @@ def run_style_transfer(content_fp: str,
 
     opt_state = opt.init(t_params)
 
+    num_params = hk.data_structures.tree_size(full_params)
+    num_t_params = hk.data_structures.tree_size(t_params)
+    mem = hk.data_structures.tree_bytes(full_params)
+
+    print(f"Total number of parameters: {num_params}")
+    print(f"Number of trainable parameters: {num_t_params}")
+    print(f"Number of non-trainable parameters: {num_params - num_t_params}")
+    print(f"Memory footprint of network parameters: {mem / 1e6:.2f} MB")
+
     # Training loop.
     # TODO: Think about changing to jax.lax control flow
-    for step in range(num_steps):
+    for step in range(num_steps + 1):
         # Do SGD on the same input image over and over again.
         t_params, opt_state, state = update(t_params, nt_params,
                                             opt_state, state, input_image)
@@ -113,6 +123,7 @@ def run_style_transfer(content_fp: str,
             print(f"Iteration: {step} Content loss: {c_loss:.4f} "
                   f"Style loss: {s_loss:.4f}")
 
+        if step % save_image_every == 0:
             save_image(t_params, f"images/styled_it{step}.jpg")
 
 
@@ -125,4 +136,5 @@ if __name__ == '__main__':
         style_layers=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5'],
         pooling="avg",
         num_steps=300,
-        learning_rate=1e-2)
+        learning_rate=1e-2,
+        save_image_every=50)

@@ -2,6 +2,7 @@ venv
 .idea
 images
 models
+__pycache__
 
 # macOS specifics
 .DS_Store

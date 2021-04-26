@@ -33,7 +33,7 @@ def split_loss_tree(loss_tree: Mapping):
 def calculate_losses(loss_tree: Mapping):
     """Returns a tuple of current content loss and style loss."""
     # obtain content and style trees
-    c_tree, s_tree = split_loss_tree(loss_tree)
+    content_tree, style_tree = split_loss_tree(loss_tree)
 
-    # reduce and return
-    return reduce_loss_tree(c_tree), reduce_loss_tree(s_tree)
+    # reduce and return losses
+    return reduce_loss_tree(content_tree), reduce_loss_tree(style_tree)

@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from image_utils import load_image
+from image_utils import load_image, save_image
 from models import augmented_vgg19
 from modules import imagenet_mean, imagenet_std
 from tree_utils import weighted_loss, calculate_losses, reduce_loss_tree
@@ -28,7 +28,7 @@ def run_style_transfer(content_fp: str,
     weights = {"content_loss": content_weight,
                "style_loss": style_weight}
 
-    def net_fn(image: jnp.ndarray):
+    def net_fn(image: jnp.ndarray, is_training: bool = False):
         vgg = augmented_vgg19(fp=model_fp,
                               style_image=style_image,
                               content_image=content_image,
@@ -37,7 +37,7 @@ def run_style_transfer(content_fp: str,
                               content_layers=content_layers,
                               style_layers=style_layers,
                               pooling=pooling)
-        return vgg(image)
+        return vgg(image, is_training)
 
     def loss(trainable_params: hk.Params,
              non_trainable_params: hk.Params,
@@ -48,7 +48,8 @@ def run_style_transfer(content_fp: str,
                                                  non_trainable_params)
 
         # stateful apply call, state contains the losses
-        _, new_state = net.apply(merged_params, current_state, rng, image)
+        _, new_state = net.apply(merged_params, current_state,
+                                 rng, image, is_training=True)
 
         w_loss = weighted_loss(new_state, weights=weights)
 
@@ -85,8 +86,11 @@ def run_style_transfer(content_fp: str,
 
     input_image = copy.deepcopy(content_image)
 
+    # clamp inputs between 0 and 1
+    input_image = jax.lax.clamp(0., input_image, 1.)
+
     # Initialize network and optimiser; we supply an input to get shapes.
-    full_params, state = net.init(rng, input_image)
+    full_params, state = net.init(rng, input_image, False)
 
     # split params into trainable and non-trainable
     t_params, nt_params = hk.data_structures.partition(
@@ -98,7 +102,7 @@ def run_style_transfer(content_fp: str,
 
     # Training loop.
     # TODO: Think about changing to jax.lax control flow
-    for step in range(num_steps + 1):
+    for step in range(num_steps):
         # Do SGD on the same input image over and over again.
         t_params, opt_state, state = update(t_params, nt_params,
                                             opt_state, state, input_image)
@@ -106,7 +110,10 @@ def run_style_transfer(content_fp: str,
         if step % 10 == 0:
             c_loss, s_loss = calculate_losses(state)
 
-            print(f"Content loss: {c_loss:.4f} Style loss: {s_loss:.4f}")
+            print(f"Iteration: {step} Content loss: {c_loss:.4f} "
+                  f"Style loss: {s_loss:.4f}")
+
+            save_image(t_params, f"images/styled_it{step}.jpg")
 
 
 if __name__ == '__main__':
@@ -118,4 +125,4 @@ if __name__ == '__main__':
         style_layers=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5'],
         pooling="avg",
         num_steps=300,
-        learning_rate=1e-3)
+        learning_rate=1e-2)

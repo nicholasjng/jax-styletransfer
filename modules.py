@@ -30,7 +30,7 @@ class StyleLoss(hk.Module):
         super(StyleLoss, self).__init__(name=name)
         self.target_g = jax.lax.stop_gradient(gram_matrix(target))
 
-    def __call__(self, x):
+    def __call__(self, x: jnp.ndarray):
         g = gram_matrix(x)
 
         style_loss = jnp.mean(jnp.square(g - self.target_g))
@@ -46,7 +46,7 @@ class ContentLoss(hk.Module):
         super(ContentLoss, self).__init__(name=name)
         self.target = jax.lax.stop_gradient(target)
 
-    def __call__(self, x):
+    def __call__(self, x: jnp.ndarray):
         content_loss = jnp.mean(jnp.square(x - self.target))
         hk.set_state("content_loss", content_loss)
 
@@ -66,12 +66,12 @@ class Normalization(hk.Module):
         # save image to make it a trainable parameter
         self.image = image
 
-        # reshape mean and std to make them [C x 1 x 1] so that they can
+        # expand mean and std to make them [C x 1 x 1] so that they can
         # directly work with image Tensor of shape [N x C x H x W].
-        self.mean = jnp.array(mean).reshape(-1, 1, 1)
-        self.std = jnp.array(std).reshape(-1, 1, 1)
+        self.mean = jnp.expand_dims(mean, (1, 2))
+        self.std = jnp.expand_dims(std, (1, 2))
 
-    def forward(self, x: jnp.ndarray):
+    def __call__(self, x: jnp.ndarray, is_training: bool = False):
         # throw away the input and (re-)use the tracked parameter instead
         # this assures that the image is actually styled
         img = hk.get_parameter("image",
@@ -79,4 +79,9 @@ class Normalization(hk.Module):
                                dtype=self.image.dtype,
                                init=hk.initializers.Constant(self.image))
 
-        return (img - self.mean) / self.std
+        if is_training:
+            out = img
+        else:
+            out = x
+
+        return (out - self.mean) / self.std

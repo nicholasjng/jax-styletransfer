@@ -24,7 +24,7 @@ def get_model_params(fp: str, verbose: bool = False) -> Parameters:
 
     config = dict()
 
-    # layers (weights + biases) arranged in h5.Groups
+    # layers (weights + biases) are arranged in h5.Groups
     for layer_name, group in hf.items():
         param_dict = dict()
         if verbose:
@@ -64,12 +64,13 @@ def augmented_vgg19(fp: str,
     """Build a VGG19 network augmented by content and style loss layers."""
     pooling = pooling.lower()
     if pooling not in ["avg", "max"]:
-        raise ValueError("Pooling method not recognized")
+        raise ValueError("Pooling method not recognized. Options are: "
+                         "\"avg\", \"max\".")
 
     params = get_model_params(fp=fp)
 
     # prepend a normalization layer
-    layers = [Normalization(content_image, mean, std, "norm")]  # []
+    layers = [Normalization(content_image, mean, std, "norm")]
 
     # tracks number of conv layers
     n = 0
@@ -102,8 +103,7 @@ def augmented_vgg19(fp: str,
             kernel_h, kernel_w, in_ch, out_ch = p_dict["w"].shape
 
             # VGG only has square conv kernels
-            assert kernel_w == kernel_h, \
-                "VGG19 is assumed to have square conv kernels"
+            assert kernel_w == kernel_h, "VGG19 only has square conv kernels"
             kernel_shape = kernel_h
 
             layers.append(hk.Conv2D(
@@ -137,8 +137,6 @@ def augmented_vgg19(fp: str,
 
     # break off after last content loss layer
     layers = layers[:(n + 1)]
-    # prepend normalization layer
-    # layers.insert(0, Normalization(content_image, mean, std, "norm"))
 
     model.layers = tuple(layers)
 

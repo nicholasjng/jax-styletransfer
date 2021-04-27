@@ -1,4 +1,5 @@
 import copy
+import os
 import time
 from typing import Tuple, List
 
@@ -36,6 +37,8 @@ STYLE_LAYERS = flags.DEFINE_list("style_layers",
                                  "conv_1,conv_2,conv_3,conv_4,conv_5",
                                  "Names of network layers for which to "
                                  "capture style loss.")
+OUT_DIR = flags.DEFINE_string("out_dir", "images", "Output directory to save "
+                                                   "the styled images to.")
 FLAGS = flags.FLAGS
 
 
@@ -150,7 +153,8 @@ def style_transfer(argv):
                   f"Style loss: {s_loss:.4f}")
 
         if step % FLAGS.save_image_every == 0:
-            save_image(t_params, f"images/styled_it{step}.jpg")
+            file_name = f"styled_it{step}.jpg"
+            save_image(t_params, os.path.join(FLAGS.out_dir, file_name))
 
     print(f"Style transfer finished. Took {(time.time() - start):.2f} secs.")
 

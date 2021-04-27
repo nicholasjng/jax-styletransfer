@@ -1,3 +1,4 @@
+import os.path
 from typing import Any
 
 import haiku as hk
@@ -9,6 +10,9 @@ from jax import tree_util
 
 
 def load_image(fp: str, img_type: str, dtype: Any = None):
+    if not os.path.exists(fp):
+        raise ValueError(f"File {fp} does not exist.")
+
     print(f'Loading {img_type} image...')
 
     image = Image.open(fp)

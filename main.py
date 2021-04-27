@@ -10,7 +10,7 @@ import optax
 from absl import app
 from absl import flags
 
-from image_utils import load_image, save_image
+from image_utils import load_image, checkpoint
 from models import augmented_vgg19
 from modules import imagenet_mean, imagenet_std
 from tree_utils import weighted_loss, calculate_losses, reduce_loss_tree
@@ -46,6 +46,9 @@ def validate_argv_inputs(argv: List):
     if len(argv) < 4:
         raise app.UsageError("Usage: python main.py CONTENT_IMAGE "
                              "STYLE_IMAGE MODEL_WEIGHTS [--flags]")
+
+    if not os.path.isdir(FLAGS.out_dir):
+        os.makedirs(FLAGS.out_dir)
     # TODO: Expand input validation
 
 
@@ -153,8 +156,8 @@ def style_transfer(argv):
                   f"Style loss: {s_loss:.4f}")
 
         if step % FLAGS.save_image_every == 0:
-            file_name = f"styled_it{step}.jpg"
-            save_image(t_params, os.path.join(FLAGS.out_dir, file_name))
+            # save current image to check progress
+            checkpoint(t_params, FLAGS.out_dir, f"styled_it{step}.jpg")
 
     print(f"Style transfer finished. Took {(time.time() - start):.2f} secs.")
 

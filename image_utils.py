@@ -29,13 +29,9 @@ def load_image(fp: str, img_type: str, target_size: int = 512, dtype=None):
 
 
 def save_image(params: hk.Params, out_fp: str):
-    out_dir = os.path.dirname(out_fp)
-    if not os.path.isdir(out_dir):
-        os.makedirs(out_dir)
-
     im_data = tree_util.tree_leaves(params)[0]
-    # clamp values again to avoid over-/underflow problems
-    im_data = jax.lax.clamp(0., im_data, 1.)
+    # clip values to avoid overflow problems in uint8 conversion
+    im_data = jnp.clip(im_data, 0., 1.)
 
     # undo transformation block, squeeze off the batch dimension
     image: np.ndarray = np.squeeze(np.asarray(im_data))
@@ -47,3 +43,10 @@ def save_image(params: hk.Params, out_fp: str):
     im = Image.fromarray(image, mode="RGB")
 
     im.save(out_fp)
+
+
+def checkpoint(params: hk.Params, out_dir: str, filename: str):
+    """Saves the image at a checkpoint given by step."""
+    out_fp = os.path.join(out_dir, filename)
+
+    save_image(params, out_fp)

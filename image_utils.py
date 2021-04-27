@@ -1,5 +1,4 @@
 import os.path
-from typing import Any
 
 import haiku as hk
 import jax
@@ -9,13 +8,15 @@ from PIL import Image
 from jax import tree_util
 
 
-def load_image(fp: str, img_type: str, dtype: Any = None):
+# TODO: Make target size a tuple for controlling aspect ratio
+def load_image(fp: str, img_type: str, target_size: int = 512, dtype=None):
     if not os.path.exists(fp):
         raise ValueError(f"File {fp} does not exist.")
 
     print(f'Loading {img_type} image...')
 
     image = Image.open(fp)
+    image = image.resize((target_size, target_size))
     image = jnp.array(image, dtype=dtype)
     image = image / 255.
     image = jnp.clip(image, 0., 1.)

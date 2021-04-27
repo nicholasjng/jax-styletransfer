@@ -21,6 +21,8 @@ POOLING = flags.DEFINE_string("pooling", "avg", "Pooling method to use.")
 NUM_STEPS = flags.DEFINE_integer("num_steps", 300, "Number of training steps.")
 LEARNING_RATE = flags.DEFINE_float("learning_rate", 1e-3,
                                    "Learning rate of the Adam optimizer.")
+IMAGE_SIZE = flags.DEFINE_integer("image_size", 512, "Target size of the "
+                                                     "images in pixels.")
 SAVE_IMAGE_EVERY = flags.DEFINE_integer("save_image_every", 50,
                                         "Saves the image every n steps "
                                         "to monitor progress.")
@@ -50,8 +52,8 @@ def style_transfer(argv):
     # first arg is Python file name
     content_fp, style_fp, model_fp = argv[1:]
 
-    content_image = load_image(content_fp, "content")
-    style_image = load_image(style_fp, "style")
+    content_image = load_image(content_fp, "content", FLAGS.image_size)
+    style_image = load_image(style_fp, "style", FLAGS.image_size)
 
     weights = {"content_loss": FLAGS.content_weight,
                "style_loss": FLAGS.style_weight}

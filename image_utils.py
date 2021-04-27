@@ -14,6 +14,7 @@ def load_image(fp: str, img_type: str, dtype: Any = None):
     image = Image.open(fp)
     image = jnp.array(image, dtype=dtype)
     image = image / 255.
+    image = jnp.clip(image, 0., 1.)
     image = jnp.expand_dims(jnp.moveaxis(image, -1, 0), 0)
 
     print(f"{img_type.capitalize()} image loaded successfully. "

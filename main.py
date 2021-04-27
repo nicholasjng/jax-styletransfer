@@ -1,5 +1,6 @@
 import copy
 from typing import Tuple, List
+import time
 
 import haiku as hk
 import jax
@@ -10,6 +11,8 @@ from image_utils import load_image, save_image
 from models import augmented_vgg19
 from modules import imagenet_mean, imagenet_std
 from tree_utils import weighted_loss, calculate_losses, reduce_loss_tree
+
+OptimizerUpdate = Tuple[hk.Params, optax.OptState, hk.State]
 
 
 def run_style_transfer(content_fp: str,
@@ -23,6 +26,7 @@ def run_style_transfer(content_fp: str,
                        num_steps: int = 300,
                        learning_rate: float = 1e-3,
                        save_image_every: int = 50):
+
     content_image = load_image(content_fp, "content")
     style_image = load_image(style_fp, "style")
 
@@ -50,7 +54,7 @@ def run_style_transfer(content_fp: str,
 
         # stateful apply call, state contains the losses
         _, new_state = net.apply(merged_params, current_state,
-                                 rng, image, is_training=True)
+                                 None, image, is_training=True)
 
         w_loss = weighted_loss(new_state, weights=weights)
 
@@ -63,8 +67,7 @@ def run_style_transfer(content_fp: str,
                non_trainable_params: hk.Params,
                c_opt_state: optax.OptState,
                c_state: hk.State,
-               image: jnp.ndarray) \
-            -> Tuple[hk.Params, optax.OptState, hk.State]:
+               image: jnp.ndarray) -> OptimizerUpdate:
         """Learning rule (stochastic gradient descent)."""
         (_, new_state), trainable_grads = (
             jax.value_and_grad(loss, has_aux=True)(trainable_params,
@@ -83,15 +86,11 @@ def run_style_transfer(content_fp: str,
 
     net = hk.transform_with_state(net_fn)
     opt = optax.adam(learning_rate=learning_rate)
-    rng = jax.random.PRNGKey(420)
 
     input_image = copy.deepcopy(content_image)
 
-    # clamp inputs between 0 and 1
-    input_image = jax.lax.clamp(0., input_image, 1.)
-
     # Initialize network and optimiser; we supply an input to get shapes.
-    full_params, state = net.init(rng, input_image, False)
+    full_params, state = net.init(None, input_image, False)
 
     # split params into trainable and non-trainable
     t_params, nt_params = hk.data_structures.partition(
@@ -110,7 +109,9 @@ def run_style_transfer(content_fp: str,
     print(f"Number of non-trainable parameters: {num_params - num_t_params}")
     print(f"Memory footprint of network parameters: {mem / 1e6:.2f} MB")
 
-    # Training loop.
+    start = time.time()
+    print("Starting style transfer optimization loop.")
+    # Style transfer loop.
     # TODO: Think about changing to jax.lax control flow
     for step in range(num_steps + 1):
         # Do SGD on the same input image over and over again.
@@ -126,6 +127,8 @@ def run_style_transfer(content_fp: str,
         if step % save_image_every == 0:
             save_image(t_params, f"images/styled_it{step}.jpg")
 
+    print(f"Style transfer finished. Took {(time.time() - start):.2f} secs.")
+
 
 if __name__ == '__main__':
     run_style_transfer(
@@ -135,6 +138,6 @@ if __name__ == '__main__':
         content_layers=['conv_4'],
         style_layers=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5'],
         pooling="avg",
-        num_steps=300,
+        num_steps=20,
         learning_rate=1e-2,
         save_image_every=50)

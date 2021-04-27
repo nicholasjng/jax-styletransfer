@@ -1,0 +1,2 @@
+https://pytorch.org/tutorials/_static/img/neural-style/picasso.jpg
+https://pytorch.org/tutorials/_static/img/neural-style/dancing.jpg

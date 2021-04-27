@@ -29,6 +29,10 @@ def load_image(fp: str, img_type: str, target_size: int = 512, dtype=None):
 
 
 def save_image(params: hk.Params, out_fp: str):
+    out_dir = os.path.dirname(out_fp)
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+
     im_data = tree_util.tree_leaves(params)[0]
     # clamp values again to avoid over-/underflow problems
     im_data = jax.lax.clamp(0., im_data, 1.)

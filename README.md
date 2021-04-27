@@ -31,9 +31,7 @@ pip install --upgrade jax jaxlib==0.1.65+cudaX.X -f https://storage.googleapis.c
 
 
 # save images and model weights into their own folder
-mkdir images
 wget -P images -i test-files.txt
-mkdir models
 wget -P models https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5
 
 python main.py images/dancing.jpg images/picasso.jpg models/vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5

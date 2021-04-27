@@ -1,11 +1,13 @@
 import copy
-from typing import Tuple, List
 import time
+from typing import Tuple, List
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
 import optax
+from absl import app
+from absl import flags
 
 from image_utils import load_image, save_image
 from models import augmented_vgg19
@@ -14,24 +16,45 @@ from tree_utils import weighted_loss, calculate_losses, reduce_loss_tree
 
 OptimizerUpdate = Tuple[hk.Params, optax.OptState, hk.State]
 
+# Syntax: Name, default value, help string
+POOLING = flags.DEFINE_string("pooling", "avg", "Pooling method to use.")
+NUM_STEPS = flags.DEFINE_integer("num_steps", 300, "Number of training steps.")
+LEARNING_RATE = flags.DEFINE_float("learning_rate", 1e-3,
+                                   "Learning rate of the Adam optimizer.")
+SAVE_IMAGE_EVERY = flags.DEFINE_integer("save_image_every", 50,
+                                        "Saves the image every n steps "
+                                        "to monitor progress.")
+CONTENT_WEIGHT = flags.DEFINE_float("content_weight", 1.,
+                                    "Content loss weight.")
+STYLE_WEIGHT = flags.DEFINE_float("style_weight", 1e4, "Style loss weight.")
+CONTENT_LAYERS = flags.DEFINE_list("content_layers", "conv_4",
+                                   "Names of network layers for which to "
+                                   "capture content loss.")
+STYLE_LAYERS = flags.DEFINE_list("style_layers",
+                                 "conv_1,conv_2,conv_3,conv_4,conv_5",
+                                 "Names of network layers for which to "
+                                 "capture style loss.")
+FLAGS = flags.FLAGS
 
-def run_style_transfer(content_fp: str,
-                       style_fp: str,
-                       model_fp: str,
-                       content_weight: float = 1.,
-                       style_weight: float = 1e6,
-                       content_layers: List[str] = None,
-                       style_layers: List[str] = None,
-                       pooling: str = "avg",
-                       num_steps: int = 300,
-                       learning_rate: float = 1e-3,
-                       save_image_every: int = 50):
+
+def validate_argv_inputs(argv: List):
+    if len(argv) < 4:
+        raise app.UsageError("Usage: python main.py CONTENT_IMAGE "
+                             "STYLE_IMAGE MODEL_WEIGHTS [--flags]")
+    # TODO: Expand input validation
+
+
+def style_transfer(argv):
+    validate_argv_inputs(argv)
+
+    # first arg is Python file name
+    content_fp, style_fp, model_fp = argv[1:]
 
     content_image = load_image(content_fp, "content")
     style_image = load_image(style_fp, "style")
 
-    weights = {"content_loss": content_weight,
-               "style_loss": style_weight}
+    weights = {"content_loss": FLAGS.content_weight,
+               "style_loss": FLAGS.style_weight}
 
     def net_fn(image: jnp.ndarray, is_training: bool = False):
         vgg = augmented_vgg19(fp=model_fp,
@@ -39,9 +62,9 @@ def run_style_transfer(content_fp: str,
                               content_image=content_image,
                               mean=imagenet_mean,
                               std=imagenet_std,
-                              content_layers=content_layers,
-                              style_layers=style_layers,
-                              pooling=pooling)
+                              content_layers=FLAGS.content_layers,
+                              style_layers=FLAGS.style_layers,
+                              pooling=FLAGS.pooling)
         return vgg(image, is_training)
 
     def loss(trainable_params: hk.Params,
@@ -85,7 +108,7 @@ def run_style_transfer(content_fp: str,
         return new_params, new_opt_state, new_state
 
     net = hk.transform_with_state(net_fn)
-    opt = optax.adam(learning_rate=learning_rate)
+    opt = optax.adam(learning_rate=FLAGS.learning_rate)
 
     input_image = copy.deepcopy(content_image)
 
@@ -113,7 +136,7 @@ def run_style_transfer(content_fp: str,
     print("Starting style transfer optimization loop.")
     # Style transfer loop.
     # TODO: Think about changing to jax.lax control flow
-    for step in range(num_steps + 1):
+    for step in range(FLAGS.num_steps + 1):
         # Do SGD on the same input image over and over again.
         t_params, opt_state, state = update(t_params, nt_params,
                                             opt_state, state, input_image)
@@ -124,20 +147,11 @@ def run_style_transfer(content_fp: str,
             print(f"Iteration: {step} Content loss: {c_loss:.4f} "
                   f"Style loss: {s_loss:.4f}")
 
-        if step % save_image_every == 0:
+        if step % FLAGS.save_image_every == 0:
             save_image(t_params, f"images/styled_it{step}.jpg")
 
     print(f"Style transfer finished. Took {(time.time() - start):.2f} secs.")
 
 
 if __name__ == '__main__':
-    run_style_transfer(
-        content_fp="images/dancing.jpg",
-        style_fp='images/picasso-equal.jpg',
-        model_fp="models/vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5",
-        content_layers=['conv_4'],
-        style_layers=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5'],
-        pooling="avg",
-        num_steps=20,
-        learning_rate=1e-2,
-        save_image_every=50)
+    app.run(style_transfer)
